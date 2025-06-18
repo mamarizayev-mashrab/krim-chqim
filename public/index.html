@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Do'kon Kirim-Chiqim</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-800">
+  <div class="container mx-auto p-6 space-y-6">
+    <!-- Sarlavha va ko'rsatkichlar -->
+    <div class="flex flex-col md:flex-row justify-between items-center bg-white rounded-xl shadow p-4">
+      <h1 class="text-3xl font-bold mb-4 md:mb-0">Do'kon Kirim‑Chiqim</h1>
+      <div class="flex flex-col sm:flex-row gap-4 text-sm">
+        <div class="bg-green-50 p-3 rounded-xl">
+          Umumiy foyda: <span id="profit" class="font-bold text-green-600">0</span> so'm
+        </div>
+        <div class="bg-red-50 p-3 rounded-xl">
+          Umumiy xarajat: <span id="totalCost" class="font-bold text-red-600">0</span> so'm
+        </div>
+        <div class="bg-blue-50 p-3 rounded-xl">
+          Umumiy tushum: <span id="totalIncome" class="font-bold text-blue-600">0</span> so'm
+        </div>
+      </div>
+    </div>
+
+    <!-- Formlar bo'limi -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Qo'shish -->
+      <div class="bg-white rounded-xl shadow-md p-6 space-y-4">
+        <h2 class="text-xl font-semibold">Mahsulot Qo'shish</h2>
+        <form id="productForm" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <input type="text" id="name" placeholder="Mahsulot nomi" class="p-2 border rounded-xl" required />
+          <input type="number" id="amount" placeholder="Soni (dona)" class="p-2 border rounded-xl" required />
+          <input type="number" id="weight" placeholder="Kg (jami)" class="p-2 border rounded-xl" required />
+          <input type="text" id="cost" placeholder="Asl narxi" class="p-2 border rounded-xl" required />
+          <input type="text" id="sellUnitPrice" placeholder="Sotuv narxi (bir dona/kg)" class="p-2 border rounded-xl" required />
+          <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 col-span-full">Qo'shish</button>
+        </form>
+      </div>
+
+      <!-- Sotish -->
+      <div class="bg-white rounded-xl shadow-md p-6 space-y-4">
+        <h2 class="text-xl font-semibold">Mahsulot Sotish</h2>
+        <input type="text" id="searchProduct" placeholder="Mahsulot nomi bo‘yicha izlash..." class="p-2 border rounded-xl w-full" oninput="filterProductSuggestions()" />
+        <form id="sellForm" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <input type="text" id="sellName" list="productSuggestions" placeholder="Mahsulot nomi" class="p-2 border rounded-xl" required />
+          <datalist id="productSuggestions"></datalist>
+          <input type="number" id="sellAmount" placeholder="Soni" class="p-2 border rounded-xl" required />
+          <input type="number" id="sellWeight" placeholder="Kg" class="p-2 border rounded-xl" required />
+          <input type="text" id="sellPrice" placeholder="Sotuv summasi" class="p-2 border rounded-xl" required />
+          <button type="submit" class="bg-green-600 text-white px-4 py-2 rounded-xl hover:bg-green-700 col-span-full">Sotish</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Jadval -->
+    <div class="bg-white rounded-xl shadow-md overflow-y-auto max-h-[400px] p-4">
+      <h2 class="text-xl font-semibold mb-4">Mahsulotlar Ro'yxati</h2>
+      <table class="w-full table-auto border-collapse text-sm">
+        <thead>
+          <tr class="bg-gray-200">
+            <th class="border p-2">#</th><th class="border p-2">Nomi</th><th class="border p-2">Soni</th>
+            <th class="border p-2">Kg</th><th class="border p-2">Asl narx</th><th class="border p-2">Sotuv narx</th>
+            <th class="border p-2">Jami xarajat</th><th class="border p-2">Qo'shilgan sana</th><th class="border p-2">Amal</th>
+          </tr>
+        </thead>
+        <tbody id="productTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const productForm = document.getElementById('productForm');
+    const sellForm = document.getElementById('sellForm');
+    const tableBody = document.getElementById('productTable');
+    const profitDisplay = document.getElementById('profit');
+    const totalCostDisplay = document.getElementById('totalCost');
+    const totalIncomeDisplay = document.getElementById('totalIncome');
+
+    let products = [];
+    let totalProfit = 0, totalCostSum = 0, totalIncome = 0;
+
+    function formatNumber(num) {
+      return Number(num).toLocaleString('uz-UZ');
+    }
+
+    productForm.addEventListener('submit', e => {
+      e.preventDefault();
+      const name = document.getElementById('name').value.trim();
+      const amount = +document.getElementById('amount').value;
+      const weight = +document.getElementById('weight').value;
+      const cost = +document.getElementById('cost').value.replace(/\D/g,'');
+      const sellPrice = +document.getElementById('sellUnitPrice').value.replace(/\D/g,'');
+      const date = new Date().toISOString().split('T')[0];
+      const totalCost = (amount + weight)*cost;
+
+      const existing = products.find(p=>p.name.toLowerCase()===name.toLowerCase());
+      if(existing){
+        existing.amount += amount; existing.weight += weight;
+        existing.totalCost += totalCost;
+        existing.unitCost = cost; existing.sellPrice = sellPrice;
+        existing.date = date;
+      } else {
+        products.push({name, amount, weight, unitCost:cost, sellPrice, totalCost, date});
+      }
+      updateTable(); updateProductSuggestions(); productForm.reset();
+    });
+
+    sellForm.addEventListener('submit', e => {
+      e.preventDefault();
+      const name = document.getElementById('sellName').value.trim();
+      const sellAmount = +document.getElementById('sellAmount').value;
+      const sellWeight = +document.getElementById('sellWeight').value;
+      const sellPrice = +document.getElementById('sellPrice').value.replace(/\D/g,'');
+
+      const product = products.find(p=>p.name.toLowerCase()===name.toLowerCase());
+      if(!product || product.amount < sellAmount || product.weight < sellWeight){
+        alert("Xatolik: mavjud emas yoki miqdor yetarli emas"); return;
+      }
+
+      const costPerUnit = product.totalCost / (product.amount + product.weight);
+      const expense = (sellAmount + sellWeight)*costPerUnit;
+      const income = sellPrice;
+      const profit = income - expense;
+
+      totalProfit += profit;
+      totalCostSum += expense;
+      totalIncome += income;
+
+      product.amount -= sellAmount;
+      product.weight -= sellWeight;
+      if(product.amount<=0 && product.weight<=0) {
+        products = products.filter(p=>p.name!==name);
+      }
+
+      updateTable(); updateProductSuggestions(); sellForm.reset();
+    });
+
+    function updateTable(){
+      tableBody.innerHTML = '';
+      products.forEach((p,i)=>{
+        const rowClass = (p.amount<=5 || p.weight<=10) ? 'bg-red-100' : '';
+        tableBody.innerHTML += `
+          <tr class="${rowClass}">
+            <td class="border p-2 text-center">${i+1}</td>
+            <td class="border p-2">${p.name}</td>
+            <td class="border p-2 text-center">${p.amount}</td>
+            <td class="border p-2 text-center">${p.weight}</td>
+            <td class="border p-2 text-right">${formatNumber(p.unitCost)}</td>
+            <td class="border p-2 text-right">${formatNumber(p.sellPrice)}</td>
+            <td class="border p-2 text-right">${formatNumber(p.totalCost)}</td>
+            <td class="border p-2 text-center">${p.date}</td>
+            <td class="border p-2 text-center"><button onclick="deleteProduct('${p.name}')" class="text-red-600 hover:underline">O'chirish</button></td>
+          </tr>`;
+      });
+      profitDisplay.textContent = formatNumber(totalProfit);
+      totalCostDisplay.textContent = formatNumber(totalCostSum);
+      totalIncomeDisplay.textContent = formatNumber(totalIncome);
+    }
+
+    function deleteProduct(name){
+      products = products.filter(p=>p.name!==name);
+      updateTable(); updateProductSuggestions();
+    }
+
+    function updateProductSuggestions() {
+      const datalist = document.getElementById('productSuggestions');
+      datalist.innerHTML = '';
+      products.forEach(p => {
+        const option = document.createElement('option');
+        option.value = p.name;
+        datalist.appendChild(option);
+      });
+    }
+
+    function filterProductSuggestions() {
+      const searchValue = document.getElementById('searchProduct').value.toLowerCase();
+      const datalist = document.getElementById('productSuggestions');
+      datalist.innerHTML = '';
+      products
+        .filter(p => p.name.toLowerCase().includes(searchValue))
+        .forEach(p => {
+          const option = document.createElement('option');
+          option.value = p.name;
+          datalist.appendChild(option);
+        });
+    }
+
+    ['cost','sellPrice','sellUnitPrice'].forEach(id=>{
+      document.getElementById(id)?.addEventListener('input', e=>{
+        const v=e.target.value.replace(/\D/g,'');
+        e.target.value=v.replace(/\B(?=(\d{3})+(?!\d))/g,',');
+      });
+    });
+
+    updateTable(); updateProductSuggestions();
+
+
+    
+  </script>
+</body>
+</html>
